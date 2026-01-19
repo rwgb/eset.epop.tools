@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: eset-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: era
+      MYSQL_USER: ${DB_USER_USERNAME:-erauser}
+      MYSQL_PASSWORD: ${DB_USER_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - eset-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  eset-server:
+    build:
+      context: ./eset-server
+      dockerfile: Dockerfile
+    container_name: eset-server
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      ESET_ADMIN_PASSWORD: ${ESET_ADMIN_PASSWORD}
+      DB_USER_USERNAME: ${DB_USER_USERNAME:-erauser}
+      DB_USER_PASSWORD: ${DB_USER_PASSWORD}
+    ports:
+      - "2222:2222"  # Agent-Server communication
+      - "2223:2223"  # Server Console HTTPS
+    volumes:
+      - eset-data:/var/opt/eset/RemoteAdministrator
+      - eset-logs:/var/log/eset/RemoteAdministrator
+      - eset-certs:/etc/opt/eset/RemoteAdministrator/Server/Cert
+    networks:
+      - eset-network
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:2223"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  webconsole:
+    build:
+      context: ./webconsole
+      dockerfile: Dockerfile
+    container_name: eset-webconsole
+    restart: unless-stopped
+    depends_on:
+      eset-server:
+        condition: service_healthy
+    environment:
+      CATALINA_OPTS: "-Xms512M -Xmx2048M"
+      ESET_SERVER_HOST: eset-server
+      ESET_SERVER_PORT: 2223
+    ports:
+      - "8080:8080"   # HTTP
+      - "8443:8443"   # HTTPS
+    volumes:
+      - webconsole-logs:/opt/tomcat/logs
+      - ./webconsole/server.xml:/opt/tomcat/conf/server.xml:ro
+      - ./webconsole/keystore.jks:/opt/tomcat/conf/keystore.jks:ro
+    networks:
+      - eset-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/era/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  eset-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local
+  eset-data:
+    driver: local
+  eset-logs:
+    driver: local
+  eset-certs:
+    driver: local
+  webconsole-logs:
+    driver: local
