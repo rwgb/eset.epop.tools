@@ -239,8 +239,9 @@ detect_java_home() {
     
     # If not found in common paths, try to detect from java command
     if command -v java &> /dev/null; then
-        local java_exec=$(command -v java)
-        JAVA_HOME_PATH=$(dirname $(dirname $(readlink -f $java_exec)))
+        local java_exec
+        java_exec=$(command -v java)
+        JAVA_HOME_PATH=$(dirname "$(dirname "$(readlink -f "$java_exec")")") 
         log_info "Java home detected from command: ${JAVA_HOME_PATH}"
         return 0
     fi
@@ -811,7 +812,8 @@ step11_install_webconsole() {
         error_exit "WAR file not found after download"
     fi
     
-    local file_size=$(stat -f%z "${war_path}" 2>/dev/null || stat -c%s "${war_path}" 2>/dev/null)
+    local file_size
+    file_size=$(stat -f%z "${war_path}" 2>/dev/null || stat -c%s "${war_path}" 2>/dev/null)
     log_info "WAR file size: ${file_size} bytes"
     
     if [[ ${file_size} -lt 1000000 ]]; then
@@ -868,9 +870,11 @@ step11_install_webconsole() {
         echo "=== Last 100 lines of catalina.out ===" >> "${LOG_FILE}"
         tail -n 100 /opt/tomcat/logs/catalina.out >> "${LOG_FILE}"
         
-        if [[ -f /opt/tomcat/logs/localhost.$(date +%Y-%m-%d).log ]]; then
+        local today
+        today=$(date +%Y-%m-%d)
+        if [[ -f "/opt/tomcat/logs/localhost.${today}.log" ]]; then
             echo "=== Localhost log ===" >> "${LOG_FILE}"
-            tail -n 50 /opt/tomcat/logs/localhost.$(date +%Y-%m-%d).log >> "${LOG_FILE}"
+            tail -n 50 "/opt/tomcat/logs/localhost.${today}.log" >> "${LOG_FILE}"
         fi
         
         log_error "Check full Tomcat logs at: /opt/tomcat/logs/"
@@ -896,7 +900,8 @@ step12_configure_https() {
     
     local keystore_path="/opt/tomcat/conf/keystore.jks"
     local keystore_password="changeit"
-    local server_hostname=$(hostname -I | awk '{print $1}')
+    local server_hostname
+    server_hostname=$(hostname -I | awk '{print $1}')
     
     # Generate self-signed certificate
     log_info "Generating self-signed SSL certificate"
@@ -977,7 +982,8 @@ EOF
 display_summary() {
     log_step "Installation Summary"
     
-    local server_ip=$(hostname -I | awk '{print $1}')
+    local server_ip
+    server_ip=$(hostname -I | awk '{print $1}')
     
     cat <<EOF | tee -a "${LOG_FILE}"
 
