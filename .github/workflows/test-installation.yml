@@ -45,6 +45,11 @@ jobs:
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            -e MYSQL_ROOT_PASSWORD="Test123" \
+            -e ESET_ADMIN_PASSWORD="Test123" \
+            -e DB_USER_USERNAME="era_user" \
+            -e DB_USER_PASSWORD="Test123" \
+            -e CI=true \
             ubuntu:${{ matrix.ubuntu-version }} \
             bash -c '
               # Update package list
@@ -121,6 +126,11 @@ jobs:
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            -e MYSQL_ROOT_PASSWORD="Test123" \
+            -e ESET_ADMIN_PASSWORD="Test123" \
+            -e DB_USER_USERNAME="era_user" \
+            -e DB_USER_PASSWORD="Test123" \
+            -e CI=true \
             debian:${{ matrix.debian-version }} \
             bash -c '
               # Update package list
@@ -209,10 +219,17 @@ jobs:
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            -e MYSQL_ROOT_PASSWORD="Test123" \
+            -e ESET_ADMIN_PASSWORD="Test123" \
+            -e DB_USER_USERNAME="era_user" \
+            -e DB_USER_PASSWORD="Test123" \
+            -e CI=true \
             ${{ matrix.os-image }}:${{ matrix.os-version }} \
             bash -c '
               # Install basic dependencies
-              yum install -y wget curl sudo which
+              # Handle curl-minimal conflict in RHEL9/AlmaLinux9
+              yum install -y wget sudo which
+              yum install -y curl --allowerasing || yum install -y curl --nobest
               
               # Make script executable
               chmod +x scripts/linux/install-eset.sh
@@ -284,6 +301,11 @@ jobs:
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
+            -e MYSQL_ROOT_PASSWORD="Test123" \
+            -e ESET_ADMIN_PASSWORD="Test123" \
+            -e DB_USER_USERNAME="era_user" \
+            -e DB_USER_PASSWORD="Test123" \
+            -e CI=true \
             fedora:${{ matrix.fedora-version }} \
             bash -c '
               # Install basic dependencies
