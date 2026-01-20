@@ -1,0 +1,32 @@
+# Environment files with sensitive credentials
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+/var/log/
+
+# Docker volumes and build artifacts
+docker/backups/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Installation artifacts
+/tmp/
+*.sh.bak
+
+# CI/CD diagnostic logs
+logs/

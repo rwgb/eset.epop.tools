@@ -1,0 +1,131 @@
+name: Build ESET Windows Installer
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'scripts/windows/**'
+      - '.github/workflows/build-windows-installer.yml'
+  pull_request:
+    paths:
+      - 'scripts/windows/**'
+      - '.github/workflows/build-windows-installer.yml'
+  release:
+    types: [created, published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: false
+        default: 'latest'
+
+jobs:
+  build:
+    name: Build Windows Binary
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: scripts/windows/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('scripts/windows/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        working-directory: scripts/windows
+        run: go mod download
+
+      - name: Build Windows binary
+        working-directory: scripts/windows
+        run: |
+          VERSION="${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}"
+          GOOS=windows GOARCH=amd64 go build \
+            -ldflags "-s -w -X main.Version=$VERSION" \
+            -o eset-protect-installer.exe \
+            install-eset-windows.go
+
+      - name: Get binary info
+        id: binary_info
+        working-directory: scripts/windows
+        run: |
+          SIZE=$(ls -lh eset-protect-installer.exe | awk '{print $5}')
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+          SHA256=$(sha256sum eset-protect-installer.exe | awk '{print $1}')
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          VERSION="${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create build info file
+        working-directory: scripts/windows
+        run: |
+          cat > BUILD_INFO.txt <<EOF
+          ESET Protect Windows Installer
+          ================================
+          Version: ${{ steps.binary_info.outputs.version }}
+          Built: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Commit: ${{ github.sha }}
+          Size: ${{ steps.binary_info.outputs.size }}
+          SHA256: ${{ steps.binary_info.outputs.sha256 }}
+          
+          Installation:
+          1. Transfer eset-protect-installer.exe to Windows Server
+          2. Right-click and select "Run as Administrator"
+          3. Follow the interactive prompts
+          
+          For detailed documentation, see:
+          https://github.com/${{ github.repository }}/tree/main/scripts/windows
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eset-protect-installer-${{ steps.binary_info.outputs.version }}
+          path: |
+            scripts/windows/eset-protect-installer.exe
+            scripts/windows/BUILD_INFO.txt
+            scripts/windows/README.md
+          retention-days: 90
+          compression-level: 9
+
+      - name: Upload release assets
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            scripts/windows/eset-protect-installer.exe
+            scripts/windows/BUILD_INFO.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Windows installer built successfully**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${{ steps.binary_info.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | ${{ steps.binary_info.outputs.size }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA256 | \`${{ steps.binary_info.outputs.sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | [Download](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "📦 **Uploaded to Release**: [${{ github.event.release.tag_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }})" >> $GITHUB_STEP_SUMMARY
+          fi
