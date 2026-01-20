@@ -1,17 +1,25 @@
 name: Build ESET Windows Installer
 
 on:
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'scripts/windows/**'
+      - '.github/workflows/build-windows-installer.yml'
+  pull_request:
+    paths:
+      - 'scripts/windows/**'
+      - '.github/workflows/build-windows-installer.yml'
+  release:
+    types: [created, published]
   workflow_dispatch:
     inputs:
       version:
         description: 'Version tag (e.g., v1.0.0)'
         required: false
         default: 'latest'
-      create_release:
-        description: 'Create GitHub Release'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   build:
@@ -45,8 +53,9 @@ jobs:
       - name: Build Windows binary
         working-directory: scripts/windows
         run: |
+          VERSION="${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}"
           GOOS=windows GOARCH=amd64 go build \
-            -ldflags "-s -w -X main.Version=${{ github.event.inputs.version }}" \
+            -ldflags "-s -w -X main.Version=$VERSION" \
             -o eset-protect-installer.exe \
             install-eset-windows.go
 
@@ -58,6 +67,8 @@ jobs:
           echo "size=$SIZE" >> $GITHUB_OUTPUT
           SHA256=$(sha256sum eset-protect-installer.exe | awk '{print $1}')
           echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          VERSION="${{ github.event.inputs.version || github.event.release.tag_name || github.ref_name }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create build info file
         working-directory: scripts/windows
@@ -65,7 +76,7 @@ jobs:
           cat > BUILD_INFO.txt <<EOF
           ESET Protect Windows Installer
           ================================
-          Version: ${{ github.event.inputs.version }}
+          Version: ${{ steps.binary_info.outputs.version }}
           Built: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           Commit: ${{ github.sha }}
           Size: ${{ steps.binary_info.outputs.size }}
@@ -83,7 +94,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: eset-protect-installer-${{ github.event.inputs.version }}
+          name: eset-protect-installer-${{ steps.binary_info.outputs.version }}
           path: |
             scripts/windows/eset-protect-installer.exe
             scripts/windows/BUILD_INFO.txt
@@ -91,47 +102,14 @@ jobs:
           retention-days: 90
           compression-level: 9
 
-      - name: Create Release
-        if: ${{ github.event.inputs.create_release == 'true' }}
+      - name: Upload release assets
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: windows-installer-${{ github.event.inputs.version }}
-          name: ESET Windows Installer ${{ github.event.inputs.version }}
-          body: |
-            ## ESET Protect Windows Installer ${{ github.event.inputs.version }}
-            
-            **Automated installer for ESET Protect On-Prem on Windows Server**
-            
-            ### 📦 Binary Information
-            - **Size**: ${{ steps.binary_info.outputs.size }}
-            - **SHA256**: `${{ steps.binary_info.outputs.sha256 }}`
-            - **Commit**: ${{ github.sha }}
-            
-            ### 📋 Requirements
-            - Windows Server 2012 R2 or later
-            - Administrator privileges
-            - Internet connection
-            - 20 GB free disk space
-            
-            ### 🚀 Quick Start
-            1. Download `eset-protect-installer.exe`
-            2. Right-click → "Run as Administrator"
-            3. Follow the prompts for passwords and configuration
-            4. Access web console at `https://your-server:2223`
-            
-            ### 📖 Documentation
-            See [Windows Installer README](https://github.com/${{ github.repository }}/tree/main/scripts/windows) for detailed information.
-            
-            ### ✅ Verification
-            Verify the SHA256 checksum:
-            ```powershell
-            Get-FileHash -Algorithm SHA256 eset-protect-installer.exe
-            ```
+          tag_name: ${{ github.event.release.tag_name }}
           files: |
             scripts/windows/eset-protect-installer.exe
             scripts/windows/BUILD_INFO.txt
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -143,11 +121,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | \`${{ github.event.inputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${{ steps.binary_info.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Size | ${{ steps.binary_info.outputs.size }} |" >> $GITHUB_STEP_SUMMARY
           echo "| SHA256 | \`${{ steps.binary_info.outputs.sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Artifact | [Download](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.event.inputs.create_release }}" == "true" ]; then
-            echo "📦 **GitHub Release Created**: [windows-installer-${{ github.event.inputs.version }}](https://github.com/${{ github.repository }}/releases/tag/windows-installer-${{ github.event.inputs.version }})" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "📦 **Uploaded to Release**: [${{ github.event.release.tag_name }}](https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }})" >> $GITHUB_STEP_SUMMARY
           fi
