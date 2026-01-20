@@ -289,6 +289,30 @@ function Test-Prerequisites {
         Exit-WithError "PowerShell 5.1 or later is required"
     }
     
+    # Check .NET Framework version (required for SQL Server)
+    Write-Info "Checking .NET Framework version"
+    try {
+        $netVersion = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -ErrorAction SilentlyContinue
+        if ($netVersion) {
+            $release = $netVersion.Release
+            Write-Info ".NET Framework 4.x detected (Release: $release)"
+            
+            # SQL Server Express requires .NET Framework 4.6 or later (release >= 393295)
+            if ($release -lt 393295) {
+                Write-Warn ".NET Framework 4.6 or later is recommended for SQL Server Express"
+                Write-Warn "Current release: $release (Need >= 393295)"
+                Write-Warn "Download from: https://dotnet.microsoft.com/download/dotnet-framework"
+            }
+        }
+        else {
+            Write-Warn ".NET Framework 4.x not detected - SQL Server may fail to install"
+            Write-Warn "Please install .NET Framework 4.6 or later from: https://dotnet.microsoft.com/download/dotnet-framework"
+        }
+    }
+    catch {
+        Write-Warn "Could not check .NET Framework version: $_"
+    }
+    
     Write-Success "All prerequisite checks passed"
 }
 
@@ -408,12 +432,43 @@ UPDATEENABLED="False"
         Write-Warn "SQL Server Express installed successfully (reboot required)"
     }
     else {
-        # Check detailed logs
-        $sqlLogPath = "$env:ProgramFiles\Microsoft SQL Server\*\Setup Bootstrap\Log\Summary.txt"
-        if (Test-Path $sqlLogPath) {
-            Write-Err "Installation log available at: $sqlLogPath"
+        # Detailed error reporting
+        Write-Err "SQL Server installation failed with exit code: $($process.ExitCode)"
+        
+        # Common error codes and their meanings
+        $errorMessage = switch ($process.ExitCode) {
+            -2068643839 { "Missing .NET Framework 4.6 or later" }
+            -2061893619 { "Missing prerequisites or system requirements not met" }
+            -2068052377 { "Installation media corrupt or incomplete" }
+            -2067919934 { "Previous installation in progress or incomplete" }
+            default { "Unknown error - check detailed logs" }
         }
-        Exit-WithError "SQL Server installation failed with exit code: $($process.ExitCode)"
+        
+        Write-Err "Likely cause: $errorMessage"
+        
+        # Check detailed logs
+        $logBasePath = "$env:ProgramFiles\Microsoft SQL Server"
+        $summaryFiles = Get-ChildItem -Path $logBasePath -Filter "Summary.txt" -Recurse -ErrorAction SilentlyContinue | 
+                        Sort-Object LastWriteTime -Descending | 
+                        Select-Object -First 1
+        
+        if ($summaryFiles) {
+            Write-Err "Detailed log available at: $($summaryFiles.FullName)"
+            Write-Info "Last 20 lines of installation log:"
+            Write-Host "----------------------------------------"
+            Get-Content $summaryFiles.FullName -Tail 20 | ForEach-Object { Write-Host $_ }
+            Write-Host "----------------------------------------"
+        }
+        
+        # Additional diagnostics
+        Write-Info "Troubleshooting steps:"
+        Write-Info "1. Ensure .NET Framework 4.6 or later is installed"
+        Write-Info "2. Run Windows Update and install all pending updates"
+        Write-Info "3. Check if another SQL Server installation is in progress"
+        Write-Info "4. Review the detailed log file above for specific errors"
+        Write-Info "5. Try running the installer manually: $installerPath"
+        
+        Exit-WithError "SQL Server installation failed. Please review the errors above."
     }
     
     # Wait for SQL Server service to start
