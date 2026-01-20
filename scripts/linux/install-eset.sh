@@ -210,7 +210,8 @@ check_os() {
             ;;
     esac
     
-    OS_VERSION="${VERSION_ID}"
+    # Export for potential use in external scripts
+    export OS_VERSION="${VERSION_ID}"
     
     # Detect Java home path
     detect_java_home
@@ -267,9 +268,11 @@ cleanup_mysql_repo() {
             fi
             
             # Remove downloaded MySQL APT config files
-            if [[ -f /tmp/mysql-apt-config*.deb ]]; then
-                rm -f /tmp/mysql-apt-config*.deb
-            fi
+            for file in /tmp/mysql-apt-config*.deb; do
+                if [[ -f "$file" ]]; then
+                    rm -f "$file"
+                fi
+            done
             ;;
         rhel|fedora)
             # Remove MySQL repository if it exists
@@ -450,9 +453,7 @@ step5_secure_mysql() {
     log_info "Setting MySQL root password and securing installation"
     
     # Check if root already has a password
-    local root_has_password=false
     if ! mysql -u root -e "SELECT 1;" >> "${LOG_FILE}" 2>&1; then
-        root_has_password=true
         log_info "MySQL root already has a password set"
         
         # Test if it's the configured password
