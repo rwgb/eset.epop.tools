@@ -492,15 +492,15 @@ jobs:
             echo "Security Scan: ${{ needs.security-scan.result }}"
             echo ""
             
-            # Count failures
+            # Count failures (using || true to prevent exit on error)
             FAILURES=0
-            [ "${{ needs.shellcheck.result }}" != "success" ] && ((FAILURES++))
-            [ "${{ needs.test-ubuntu.result }}" != "success" ] && ((FAILURES++))
-            [ "${{ needs.test-debian.result }}" != "success" ] && ((FAILURES++))
-            [ "${{ needs.test-rhel-based.result }}" != "success" ] && ((FAILURES++))
-            [ "${{ needs.test-fedora.result }}" != "success" ] && ((FAILURES++))
-            [ "${{ needs.test-dry-run.result }}" != "success" ] && ((FAILURES++))
-            [ "${{ needs.security-scan.result }}" != "success" ] && ((FAILURES++))
+            [ "${{ needs.shellcheck.result }}" != "success" ] && ((FAILURES++)) || true
+            [ "${{ needs.test-ubuntu.result }}" != "success" ] && ((FAILURES++)) || true
+            [ "${{ needs.test-debian.result }}" != "success" ] && ((FAILURES++)) || true
+            [ "${{ needs.test-rhel-based.result }}" != "success" ] && ((FAILURES++)) || true
+            [ "${{ needs.test-fedora.result }}" != "success" ] && ((FAILURES++)) || true
+            [ "${{ needs.test-dry-run.result }}" != "success" ] && ((FAILURES++)) || true
+            [ "${{ needs.security-scan.result }}" != "success" ] && ((FAILURES++)) || true
             
             echo "Total Failed Jobs: $FAILURES"
             echo ""
@@ -545,7 +545,8 @@ jobs:
             echo "   https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             echo "3. Download individual test artifacts for detailed analysis"
             echo "4. Run the failing test locally using the same Docker image"
-            
+            echo ""
+            echo "Common causes of failures:"
             echo "- Permission issues"
             echo "- Network connectivity problems"
             echo ""
@@ -564,20 +565,20 @@ jobs:
       - name: Set final status
         run: |
           FAILURES=0
-          [ "${{ needs.shellcheck.result }}" != "success" ] && ((FAILURES++))
-          [ "${{ needs.test-ubuntu.result }}" != "success" ] && ((FAILURES++))
-          [ "${{ needs.test-debian.result }}" != "success" ] && ((FAILURES++))
-          [ "${{ needs.test-rhel-based.result }}" != "success" ] && ((FAILURES++))
-          [ "${{ needs.test-fedora.result }}" != "success" ] && ((FAILURES++))
-          [ "${{ needs.test-dry-run.result }}" != "success" ] && ((FAILURES++))
-          [ "${{ needs.security-scan.result }}" != "success" ] && ((FAILURES++))
+          [ "${{ needs.shellcheck.result }}" != "success" ] && ((FAILURES++)) || true
+          [ "${{ needs.test-ubuntu.result }}" != "success" ] && ((FAILURES++)) || true
+          [ "${{ needs.test-debian.result }}" != "success" ] && ((FAILURES++)) || true
+          [ "${{ needs.test-rhel-based.result }}" != "success" ] && ((FAILURES++)) || true
+          [ "${{ needs.test-fedora.result }}" != "success" ] && ((FAILURES++)) || true
+          [ "${{ needs.test-dry-run.result }}" != "success" ] && ((FAILURES++)) || true
+          [ "${{ needs.security-scan.result }}" != "success" ] && ((FAILURES++)) || true
           
           if [ $FAILURES -gt 0 ]; then
             echo "::warning::$FAILURES test job(s) failed - check the combined diagnostic report artifact"
-          fix/install-eset.sh; then
-            echo "ℹ Temporary files used - ensure proper cleanup"
+            exit 1
+          else
+            echo "✅ All test jobs passed successfully!"
           fi
-          
           echo "✓ Security scan completed"
 
   integration-summary:
