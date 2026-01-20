@@ -414,10 +414,10 @@ jobs:
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
-            -e MYSQL_ROOT_PASSWORD="${TEST_MYSQL_PASSWORD:-TestPass123}" \
-            -e ESET_ADMIN_PASSWORD="${TEST_ADMIN_PASSWORD:-TestPass123}" \
+            -e MYSQL_ROOT_PASSWORD="Test123" \
+            -e ESET_ADMIN_PASSWORD="Test123" \
             -e DB_USER_USERNAME="era_user" \
-            -e DB_USER_PASSWORD="${TEST_DB_PASSWORD:-TestPass123}" \
+            -e DB_USER_PASSWORD="Test123" \
             -e CI=true \
             ubuntu:24.04 \
             bash -c '
