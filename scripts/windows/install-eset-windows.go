@@ -131,12 +131,12 @@ func PromptForInput(prompt string, hideInput bool) (string, error) {
 
 // readPassword reads password input without echoing
 func readPassword() (string, error) {
-	var password []byte
 	var err error
 
 	// Try to read password using Windows API
 	fd := int(syscall.Stdin)
-	state, err := windows.GetConsoleMode(windows.Handle(fd))
+	var state uint32
+	err = windows.GetConsoleMode(windows.Handle(fd), &state)
 	if err != nil {
 		// Fallback to regular input if not a console
 		reader := bufio.NewReader(os.Stdin)
