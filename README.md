@@ -74,37 +74,58 @@ The script will:
 
 ## Windows Installation
 
-### One-Line PowerShell Installation
+### One-Line PowerShell Installation (Recommended)
 
-**Quick install** (downloads latest release and runs the installer):
+**Quick install** (downloads and runs the automated PowerShell installer):
 
 ```powershell
 # Run PowerShell as Administrator, then execute:
-Invoke-WebRequest -Uri "https://github.com/rwgb/eset.epop.tools/releases/latest/download/eset-protect-installer.exe" -OutFile "$env:TEMP\eset-installer.exe"; Start-Process -FilePath "$env:TEMP\eset-installer.exe" -Verb RunAs
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/windows/install-eset.ps1" -OutFile "$env:TEMP\install-eset.ps1"; Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\install-eset.ps1"
 ```
 
 Or using shorter alias:
 
 ```powershell
+iwr -Uri "https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/windows/install-eset.ps1" -OutFile "$env:TEMP\install-eset.ps1"; Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\install-eset.ps1"
+```
+
+The script will:
+- Install SQL Server Express x64
+- Configure database and firewall
+- Install ESET Protect Server with unattended installation
+- Configure all services
+- Provide verbose logging
+
+### Non-Interactive Installation (CI/Automation)
+
+For automated deployments, provide credentials as parameters:
+
+```powershell
+# Download the script
+iwr -Uri "https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/windows/install-eset.ps1" -OutFile "$env:TEMP\install-eset.ps1"
+
+# Run with parameters
+Set-ExecutionPolicy Bypass -Scope Process -Force
+& "$env:TEMP\install-eset.ps1" -NonInteractive `
+  -MySQLRootPassword "your_sql_password" `
+  -EsetAdminPassword "your_admin_password" `
+  -DbUserUsername "era_user" `
+  -DbUserPassword "your_db_password"
+```
+
+### Alternative: Pre-compiled Installer
+
+Download the Go-based installer from the [latest release](https://github.com/rwgb/eset.epop.tools/releases/latest):
+
+```powershell
+# Download and run the compiled installer
 iwr -Uri "https://github.com/rwgb/eset.epop.tools/releases/latest/download/eset-protect-installer.exe" -OutFile "$env:TEMP\eset-installer.exe"; Start-Process "$env:TEMP\eset-installer.exe" -Verb RunAs
 ```
 
-### Manual Download and Run
-
-Download the installer from the [latest release](https://github.com/rwgb/eset.epop.tools/releases/latest):
-
+Or manually:
 1. Download `eset-protect-installer.exe`
 2. Right-click → "Run as Administrator"
 3. Follow the interactive prompts
-
-The installer will:
-- Check system requirements
-- Install MySQL Server
-- Configure database
-- Install ESET Protect Server
-- Install and configure Tomcat
-- Deploy Web Console
-- Configure Windows services
 
 ### Requirements
 
