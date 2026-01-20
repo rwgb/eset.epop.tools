@@ -441,38 +441,61 @@ func main() {
 	fmt.Println("(Press Enter to use default values where applicable)")
 	fmt.Println()
 
-	consolePassword, err := PromptForInput("ESET Console Administrator Password: ", true)
-	if err != nil {
-		logger.Error("Failed to read password: %v", err)
-		os.Exit(1)
+	// Prompt for console password with retry logic
+	var consolePassword string
+	maxAttempts := 3
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		password, err := PromptForInput("ESET Console Administrator Password: ", true)
+		if err != nil {
+			logger.Error("Failed to read password: %v", err)
+			os.Exit(1)
+		}
+
+		confirm, err := PromptForInput("Confirm Console Password: ", true)
+		if err != nil {
+			logger.Error("Failed to read password: %v", err)
+			os.Exit(1)
+		}
+
+		if password == confirm {
+			consolePassword = password
+			break
+		}
+
+		if attempt < maxAttempts {
+			logger.Warn("Passwords do not match. Please try again. (Attempt %d/%d)", attempt, maxAttempts)
+		} else {
+			logger.Error("Passwords do not match after %d attempts", maxAttempts)
+			os.Exit(1)
+		}
 	}
 
-	consolePasswordConfirm, err := PromptForInput("Confirm Console Password: ", true)
-	if err != nil {
-		logger.Error("Failed to read password: %v", err)
-		os.Exit(1)
-	}
+	// Prompt for database password with retry logic
+	var dbPassword string
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		password, err := PromptForInput("Database Password: ", true)
+		if err != nil {
+			logger.Error("Failed to read password: %v", err)
+			os.Exit(1)
+		}
 
-	if consolePassword != consolePasswordConfirm {
-		logger.Error("Passwords do not match")
-		os.Exit(1)
-	}
+		confirm, err := PromptForInput("Confirm Database Password: ", true)
+		if err != nil {
+			logger.Error("Failed to read password: %v", err)
+			os.Exit(1)
+		}
 
-	dbPassword, err := PromptForInput("Database Password: ", true)
-	if err != nil {
-		logger.Error("Failed to read password: %v", err)
-		os.Exit(1)
-	}
+		if password == confirm {
+			dbPassword = password
+			break
+		}
 
-	dbPasswordConfirm, err := PromptForInput("Confirm Database Password: ", true)
-	if err != nil {
-		logger.Error("Failed to read password: %v", err)
-		os.Exit(1)
-	}
-
-	if dbPassword != dbPasswordConfirm {
-		logger.Error("Passwords do not match")
-		os.Exit(1)
+		if attempt < maxAttempts {
+			logger.Warn("Passwords do not match. Please try again. (Attempt %d/%d)", attempt, maxAttempts)
+		} else {
+			logger.Error("Passwords do not match after %d attempts", maxAttempts)
+			os.Exit(1)
+		}
 	}
 
 	installPath, err := PromptForInput("Installation Path (press Enter for default): ", false)
