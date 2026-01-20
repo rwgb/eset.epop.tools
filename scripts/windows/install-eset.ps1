@@ -65,8 +65,8 @@ param(
 $script:Config = @{
     SqlServerExpressUrl = "https://download.microsoft.com/download/3/8/d/38de7036-2433-4207-8eae-06e247e17b25/SQLEXPR_x64_ENU.exe"
     SqlServerExpressFile = "SQLEXPR_x64_ENU.exe"
-    EsetInstallerUrl = "https://download.eset.com/com/eset/apps/business/era/server/windows/latest/era_server_x64.msi"
-    EsetInstallerFile = "era_server_x64.msi"
+    EsetInstallerUrl = "https://download.eset.com/com/eset/apps/business/era/server/windows/latest/server_x64.msi"
+    EsetInstallerFile = "server_x64.msi"
     LogDirectory = "C:\ProgramData\ESET\Logs\Installer"
     TempDirectory = "C:\Temp\ESET-Install"
     SqlInstanceName = "ESETERA"
