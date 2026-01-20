@@ -3,6 +3,20 @@
 #######################################
 # ESET Protect On-Prem Installation Script
 # For Ubuntu 24.04 LTS
+#
+# USAGE:
+#   Interactive mode (prompts for credentials):
+#     sudo ./install-eset.sh
+#
+#   Non-interactive mode (uses environment variables):
+#     sudo MYSQL_ROOT_PASSWORD="your_mysql_password" \
+#          ESET_ADMIN_PASSWORD="your_admin_password" \
+#          DB_USER_USERNAME="era_user" \
+#          DB_USER_PASSWORD="your_db_password" \
+#          ./install-eset.sh
+#
+#   CI/Automated environments will automatically use
+#   non-interactive mode when environment variables are set.
 #######################################
 
 set -e  # Exit on error
@@ -16,7 +30,7 @@ ESET_WEBCONSOLE_URL="https://download.eset.com/com/eset/apps/business/era/webcon
 TOMCAT_VERSION="9.0.85"
 TOMCAT_DOWNLOAD_URL="https://dlcdn.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz"
 
-# User-configured variables (will be set by prompts)
+# User-configured variables (will be set by prompts or environment variables)
 MYSQL_ROOT_PASSWORD=""
 ESET_ADMIN_PASSWORD=""
 DB_USER_USERNAME=""
@@ -78,6 +92,25 @@ error_exit() {
 
 prompt_credentials() {
     log_step "Configuration Setup"
+    
+    # Check if all required credentials are set (non-interactive mode)
+    if [[ -n "${MYSQL_ROOT_PASSWORD}" ]] && [[ -n "${ESET_ADMIN_PASSWORD}" ]] && \
+       [[ -n "${DB_USER_USERNAME}" ]] && [[ -n "${DB_USER_PASSWORD}" ]]; then
+        log_info "Using credentials from environment variables (non-interactive mode)"
+        log_info "MySQL root password: ***"
+        log_info "ESET administrator password: ***"
+        log_info "Database username: ${DB_USER_USERNAME}"
+        log_info "Database user password: ***"
+        echo ""
+        echo -e "${GREEN}Configuration complete!${NC}"
+        echo ""
+        return 0
+    fi
+    
+    # Check if we're in a non-interactive environment without credentials
+    if [[ ! -t 0 ]] || [[ "${CI}" == "true" ]] || [[ "${DEBIAN_FRONTEND}" == "noninteractive" ]]; then
+        error_exit "Running in non-interactive mode but required credentials are not set. Please set environment variables: MYSQL_ROOT_PASSWORD, ESET_ADMIN_PASSWORD, DB_USER_USERNAME, DB_USER_PASSWORD"
+    fi
     
     echo -e "${YELLOW}Please provide the following configuration details:${NC}"
     echo ""

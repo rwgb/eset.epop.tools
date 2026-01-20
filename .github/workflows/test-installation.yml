@@ -386,6 +386,41 @@ jobs:
           else
             echo "ℹ No help text implemented (optional)"
           fi
+      
+      - name: Test non-interactive mode with environment variables
+        run: |
+          docker run --rm --privileged \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            -e MYSQL_ROOT_PASSWORD="${TEST_MYSQL_PASSWORD:-TestPass123}" \
+            -e ESET_ADMIN_PASSWORD="${TEST_ADMIN_PASSWORD:-TestPass123}" \
+            -e DB_USER_USERNAME="era_user" \
+            -e DB_USER_PASSWORD="${TEST_DB_PASSWORD:-TestPass123}" \
+            -e CI=true \
+            ubuntu:24.04 \
+            bash -c '
+              # Update and install dependencies
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y wget curl sudo systemctl
+              
+              # Make script executable
+              chmod +x scripts/linux/install-eset.sh
+              
+              # Test that script accepts environment variables (dry run to credentials check)
+              # This will test non-interactive credential handling without full installation
+              export -p | grep -E "MYSQL_ROOT_PASSWORD|ESET_ADMIN_PASSWORD|DB_USER"
+              
+              # Source the script to test prompt_credentials function
+              source scripts/linux/install-eset.sh
+              
+              # Call prompt_credentials to verify it uses env vars
+              prompt_credentials
+              
+              echo "✓ Non-interactive mode with environment variables works correctly"
+            ' || {
+            echo "FAILED: Non-interactive mode test failed"
+            exit 1
+          }
 
   security-scan:
     name: Security Scan
