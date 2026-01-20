@@ -4,17 +4,50 @@
 
 The automated installation script supports multiple Linux distributions and handles all installation steps automatically.
 
-### Using the Automated Script
+### One-Line Installation
+
+**Quick install** (downloads and runs the installer):
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/linux/install-eset.sh)"
+```
+
+Or using wget:
+
+```bash
+sudo bash -c "$(wget -qO- https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/linux/install-eset.sh)"
+```
+
+The script will prompt for:
+- MySQL root password
+- ESET administrator password
+- Database username and password
+
+### Manual Download and Run
+
+Alternatively, download the script first to review before executing:
 
 ```bash
 # Download the installation script
-wget https://raw.githubusercontent.com/your-repo/eset-protect/main/scripts/install-eset.sh
+wget https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/linux/install-eset.sh
 
 # Make it executable
 chmod +x install-eset.sh
 
 # Run the installer (will prompt for credentials)
-./install-eset.sh
+sudo ./install-eset.sh
+```
+
+### Non-Interactive Installation (CI/Automation)
+
+For automated deployments, provide credentials via environment variables:
+
+```bash
+sudo MYSQL_ROOT_PASSWORD="your_mysql_password" \
+     ESET_ADMIN_PASSWORD="your_admin_password" \
+     DB_USER_USERNAME="era_user" \
+     DB_USER_PASSWORD="your_db_password" \
+     ./install-eset.sh
 ```
 
 The script will:
