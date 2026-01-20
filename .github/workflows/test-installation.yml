@@ -30,7 +30,6 @@ jobs:
   test-ubuntu:
     name: Test on Ubuntu ${{ matrix.ubuntu-version }}
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       matrix:
         ubuntu-version: ['20.04', '22.04', '24.04']
@@ -42,7 +41,6 @@ jobs:
 
       - name: Test on Ubuntu ${{ matrix.ubuntu-version }}
         id: test
-        continue-on-error: true
         run: |
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
@@ -108,7 +106,6 @@ jobs:
   test-debian:
     name: Test on Debian ${{ matrix.debian-version }}
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       matrix:
         debian-version: ['11', '12']
@@ -120,7 +117,6 @@ jobs:
 
       - name: Test on Debian ${{ matrix.debian-version }}
         id: test
-        continue-on-error: true
         run: |
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
@@ -186,7 +182,6 @@ jobs:
   test-rhel-based:
     name: Test on ${{ matrix.os-name }} ${{ matrix.os-version }}
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       matrix:
         include:
@@ -210,7 +205,6 @@ jobs:
 
       - name: Test on ${{ matrix.os-name }} ${{ matrix.os-version }}
         id: test
-        continue-on-error: true
         run: |
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
@@ -275,7 +269,6 @@ jobs:
   test-fedora:
     name: Test on Fedora ${{ matrix.fedora-version }}
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       matrix:
         fedora-version: ['38', '39', '40']
@@ -287,7 +280,6 @@ jobs:
 
       - name: Test on Fedora ${{ matrix.fedora-version }}
         id: test
-        continue-on-error: true
         run: |
           docker run --rm --privileged \
             -v ${{ github.workspace }}:/workspace \
