@@ -31,10 +31,11 @@ TOMCAT_VERSION="9.0.85"
 TOMCAT_DOWNLOAD_URL="https://dlcdn.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz"
 
 # User-configured variables (will be set by prompts or environment variables)
-MYSQL_ROOT_PASSWORD=""
-ESET_ADMIN_PASSWORD=""
-DB_USER_USERNAME=""
-DB_USER_PASSWORD=""
+# Use conditional assignment to preserve existing environment variables
+MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-}"
+ESET_ADMIN_PASSWORD="${ESET_ADMIN_PASSWORD:-}"
+DB_USER_USERNAME="${DB_USER_USERNAME:-}"
+DB_USER_PASSWORD="${DB_USER_PASSWORD:-}"
 
 # OS Detection variables
 OS_TYPE=""
