@@ -72,7 +72,53 @@ The script will:
 
 ---
 
-## Manual Installation
+## Windows Installation
+
+### One-Line PowerShell Installation
+
+**Quick install** (downloads latest release and runs the installer):
+
+```powershell
+# Run PowerShell as Administrator, then execute:
+Invoke-WebRequest -Uri "https://github.com/rwgb/eset.epop.tools/releases/latest/download/eset-protect-installer.exe" -OutFile "$env:TEMP\eset-installer.exe"; Start-Process -FilePath "$env:TEMP\eset-installer.exe" -Verb RunAs
+```
+
+Or using shorter alias:
+
+```powershell
+iwr -Uri "https://github.com/rwgb/eset.epop.tools/releases/latest/download/eset-protect-installer.exe" -OutFile "$env:TEMP\eset-installer.exe"; Start-Process "$env:TEMP\eset-installer.exe" -Verb RunAs
+```
+
+### Manual Download and Run
+
+Download the installer from the [latest release](https://github.com/rwgb/eset.epop.tools/releases/latest):
+
+1. Download `eset-protect-installer.exe`
+2. Right-click → "Run as Administrator"
+3. Follow the interactive prompts
+
+The installer will:
+- Check system requirements
+- Install MySQL Server
+- Configure database
+- Install ESET Protect Server
+- Install and configure Tomcat
+- Deploy Web Console
+- Configure Windows services
+
+### Requirements
+
+- **Windows Server 2012 R2 or later**
+- Administrator privileges
+- Internet connection
+- 20 GB free disk space
+- 4 GB RAM minimum
+
+For detailed Windows installation documentation, see [scripts/windows/README.md](scripts/windows/README.md).
+
+---
+
+## Manual Installation (Linux)
 
 ### Ubuntu/Debian Installation
 
