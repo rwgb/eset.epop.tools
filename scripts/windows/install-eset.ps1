@@ -575,11 +575,31 @@ function Configure-SqlServer {
         Write-Warn "Could not create firewall rule: $_"
     }
     
-    # Create ESET database and user
-    Write-Info "Creating ESET database and user"
+    # Wait for SQL Server to be fully ready
+    Write-Info "Waiting for SQL Server to be fully ready for connections..."
+    Start-Sleep -Seconds 5
+    
+    # Create ESET database and user using Windows Authentication first
+    Write-Info "Configuring SQL Server authentication and creating database"
     
     $serverInstance = "$env:COMPUTERNAME\$($Config.SqlInstanceName)"
     
+    # First, use Windows Authentication to enable SA and set password
+    $setupSaScript = @"
+-- Enable SA login and set password
+USE master;
+GO
+
+ALTER LOGIN sa WITH PASSWORD = '$MySQLRootPassword';
+GO
+
+ALTER LOGIN sa ENABLE;
+GO
+
+PRINT 'SA account enabled and password set';
+"@
+    
+    # Then create database and user
     $createDbScript = @"
 -- Create database if it doesn't exist
 IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = '$($Config.DatabaseName)')
@@ -627,29 +647,54 @@ GO
 PRINT 'Database configuration complete';
 "@
     
+    $setupSaScriptPath = Join-Path $Config.TempDirectory "setup_sa.sql"
     $sqlScriptPath = Join-Path $Config.TempDirectory "create_db.sql"
+    Set-Content -Path $setupSaScriptPath -Value $setupSaScript -Force
     Set-Content -Path $sqlScriptPath -Value $createDbScript -Force
     
     try {
-        # Use sqlcmd to execute the script
+        # Use sqlcmd to execute the scripts
         $sqlcmdPath = Get-Command sqlcmd.exe -ErrorAction SilentlyContinue
         
         if ($sqlcmdPath) {
-            $sqlcmdArgs = @(
+            # First enable SA account using Windows Authentication (trusted connection)
+            Write-Info "Enabling SA account using Windows Authentication"
+            $setupArgs = @(
                 "-S", $serverInstance
-                "-U", "sa"
-                "-P", $MySQLRootPassword
-                "-i", $sqlScriptPath
+                "-E"  # Use Windows Authentication
+                "-i", $setupSaScriptPath
             )
             
-            $result = & sqlcmd.exe $sqlcmdArgs 2>&1
+            $setupResult = & sqlcmd.exe $setupArgs 2>&1
             
             if ($LASTEXITCODE -eq 0) {
-                Write-Success "Database and user created successfully"
+                Write-Success "SA account enabled successfully"
+                
+                # Wait a moment for changes to apply
+                Start-Sleep -Seconds 3
+                
+                # Now create database using SQL Authentication
+                Write-Info "Creating database and user using SQL Authentication"
+                $createArgs = @(
+                    "-S", $serverInstance
+                    "-U", "sa"
+                    "-P", $MySQLRootPassword
+                    "-i", $sqlScriptPath
+                )
+                
+                $result = & sqlcmd.exe $createArgs 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Database and user created successfully"
+                }
+                else {
+                    Write-Err "sqlcmd output: $result"
+                    Exit-WithError "Failed to create database and user"
+                }
             }
             else {
-                Write-Err "sqlcmd output: $result"
-                Exit-WithError "Failed to create database and user"
+                Write-Err "Failed to enable SA account: $setupResult"
+                Exit-WithError "Could not configure SA account"
             }
         }
         else {
