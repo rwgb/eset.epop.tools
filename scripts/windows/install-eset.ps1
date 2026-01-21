@@ -684,31 +684,28 @@ function Install-EsetProtect {
     $msiLogPath = Join-Path $Config.LogDirectory "eset-msi-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
     $serverInstance = "$env:COMPUTERNAME\$($Config.SqlInstanceName)"
     
-    $msiArgs = @(
-        "/i", "`"$installerPath`""
-        "/qn"  # Quiet mode, no UI
-        "/l*v", "`"$msiLogPath`""  # Verbose logging
-        "ADDLOCAL=ALL"
-        "CONSOLEPASSWORD=$EsetAdminPassword"
-        "DBTYPE=1"  # SQL Server
-        "DBHOSTNAME=$serverInstance"
-        "DBPORT=$($Config.SqlPort)"
-        "DBNAME=$($Config.DatabaseName)"
-        "DBADMINNAME=sa"
-        "DBADMINPASSWORD=$MySQLRootPassword"
-        "DBUSERNAME=$DbUserUsername"
-        "DBUSERPASSWORD=$DbUserPassword"
-        "CERT_HOSTNAME=*"
-    )
+    # Build MSI command line as a single string
+    $msiCommand = "/i `"$installerPath`" /qn /norestart /l*v `"$msiLogPath`" " +
+                  "ADDLOCAL=ALL " +
+                  "CONSOLEPASSWORD=`"$EsetAdminPassword`" " +
+                  "DBTYPE=1 " +
+                  "DBHOSTNAME=`"$serverInstance`" " +
+                  "DBPORT=$($Config.SqlPort) " +
+                  "DBNAME=`"$($Config.DatabaseName)`" " +
+                  "DBADMINNAME=`"sa`" " +
+                  "DBADMINPASSWORD=`"$MySQLRootPassword`" " +
+                  "DBUSERNAME=`"$DbUserUsername`" " +
+                  "DBUSERPASSWORD=`"$DbUserPassword`" " +
+                  "CERT_HOSTNAME=`"*`""
     
     if (-not [string]::IsNullOrEmpty($InstallPath)) {
-        $msiArgs += "INSTALLDIR=`"$InstallPath`""
+        $msiCommand += " INSTALLDIR=`"$InstallPath`""
     }
     
     Write-Info "Installation log will be written to: $msiLogPath"
-    Write-Info "Command: msiexec $($msiArgs -join ' ' -replace 'PASSWORD=[^"]*','PASSWORD=***')"
+    Write-Info "Command: msiexec $($msiCommand -replace 'PASSWORD=`"[^`"]*`"','PASSWORD=`"***`"')"
     
-    $process = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -PassThru -NoNewWindow
+    $process = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiCommand -Wait -PassThru -NoNewWindow
     
     if ($process.ExitCode -eq 0) {
         Write-Success "ESET Protect installed successfully!"
