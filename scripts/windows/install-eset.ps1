@@ -489,6 +489,26 @@ UPDATEENABLED="False"
             Exit-WithError "Failed to start SQL Server service: $_"
         }
     }
+    
+    # Enable SQL Server authentication (mixed mode)
+    Write-Info "Enabling SQL Server authentication (mixed mode)"
+    try {
+        $registryPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL*.$($Config.SqlInstanceName)\MSSQLServer"
+        $actualPath = Get-Item $registryPath -ErrorAction Stop | Select-Object -First 1
+        
+        Set-ItemProperty -Path $actualPath.PSPath -Name "LoginMode" -Value 2 -ErrorAction Stop
+        Write-Info "SQL Server authentication enabled"
+        
+        # Restart SQL Server to apply changes
+        Write-Info "Restarting SQL Server to apply authentication changes..."
+        Restart-Service -Name "MSSQL`$$($Config.SqlInstanceName)" -Force
+        Start-Sleep -Seconds 15
+        Write-Success "SQL Server restarted"
+    }
+    catch {
+        Write-Warn "Could not enable SQL authentication via registry: $_"
+        Write-Info "Attempting to continue - authentication may need manual configuration"
+    }
 }
 
 #######################################
