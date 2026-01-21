@@ -640,6 +640,34 @@ PRINT 'Database configuration complete';
         Write-Warn "Could not create database via sqlcmd: $_"
         Write-Info "Database will be created during ESET installation"
     }
+    
+    # Test SQL Server connection before proceeding
+    Write-Info "Testing SQL Server connection"
+    try {
+        $testQuery = "SELECT @@VERSION"
+        $sqlcmdPath = Get-Command sqlcmd.exe -ErrorAction SilentlyContinue
+        
+        if ($sqlcmdPath) {
+            $testArgs = @("-S", $serverInstance, "-U", "sa", "-P", $MySQLRootPassword, "-Q", $testQuery)
+            $testResult = & sqlcmd.exe $testArgs 2>&1
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "SQL Server connection test successful"
+                Write-Info "SQL Server version: $($testResult[0])"
+            }
+            else {
+                Write-Err "SQL Server connection test failed"
+                Write-Err "Error: $testResult"
+                Exit-WithError "Cannot connect to SQL Server. Please verify SQL Server is running and credentials are correct."
+            }
+        }
+        else {
+            Write-Warn "sqlcmd not found. Skipping connection test."
+        }
+    }
+    catch {
+        Write-Warn "Could not test SQL Server connection: $_"
+    }
 }
 
 #######################################
@@ -684,19 +712,25 @@ function Install-EsetProtect {
     $msiLogPath = Join-Path $Config.LogDirectory "eset-msi-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
     $serverInstance = "$env:COMPUTERNAME\$($Config.SqlInstanceName)"
     
-    # Build MSI command line as a single string
+    # Build MSI command line with correct ESET property names
+    # Using P_ prefix for ESET properties as shown in their documentation
     $msiCommand = "/i `"$installerPath`" /qn /norestart /l*v `"$msiLogPath`" " +
                   "ADDLOCAL=ALL " +
-                  "CONSOLEPASSWORD=`"$EsetAdminPassword`" " +
-                  "DBTYPE=1 " +
-                  "DBHOSTNAME=`"$serverInstance`" " +
-                  "DBPORT=$($Config.SqlPort) " +
-                  "DBNAME=`"$($Config.DatabaseName)`" " +
-                  "DBADMINNAME=`"sa`" " +
-                  "DBADMINPASSWORD=`"$MySQLRootPassword`" " +
-                  "DBUSERNAME=`"$DbUserUsername`" " +
-                  "DBUSERPASSWORD=`"$DbUserPassword`" " +
-                  "CERT_HOSTNAME=`"*`""
+                  "P_ACTIVATE_WITH_LICENSE_NOW=0 " +
+                  "P_DB_ENGINE=2 " +
+                  "P_DB_TYPE=1 " +
+                  "P_DB_SERVER=`"$serverInstance`" " +
+                  "P_DB_NAME=`"$($Config.DatabaseName)`" " +
+                  "P_DB_ADMIN_NAME=`"sa`" " +
+                  "P_DB_ADMIN_PASSWORD=`"$MySQLRootPassword`" " +
+                  "P_DB_USER_NAME=`"$DbUserUsername`" " +
+                  "P_DB_USER_PASSWORD=`"$DbUserPassword`" " +
+                  "P_ADMIN_PASSWORD=`"$EsetAdminPassword`" " +
+                  "P_SERVER_CERTIFICATES_OPTION=GENERATE " +
+                  "P_SERVER_CERTIFICATES_OPTION_REPAIR=KEEP " +
+                  "P_CERT_AUTH_COMMON_NAME=`"Server Certification Authority`" " +
+                  "P_SERVER_PORT=2222 " +
+                  "P_CONSOLE_PORT=2223"
     
     if (-not [string]::IsNullOrEmpty($InstallPath)) {
         $msiCommand += " INSTALLDIR=`"$InstallPath`""
