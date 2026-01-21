@@ -496,14 +496,40 @@ UPDATEENABLED="False"
         $registryPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL*.$($Config.SqlInstanceName)\MSSQLServer"
         $actualPath = Get-Item $registryPath -ErrorAction Stop | Select-Object -First 1
         
-        Set-ItemProperty -Path $actualPath.PSPath -Name "LoginMode" -Value 2 -ErrorAction Stop
-        Write-Info "SQL Server authentication enabled"
+        # Check current login mode
+        $currentLoginMode = Get-ItemProperty -Path $actualPath.PSPath -Name "LoginMode" -ErrorAction SilentlyContinue
+        Write-Info "Current LoginMode: $($currentLoginMode.LoginMode) (1=Windows, 2=Mixed)"
         
-        # Restart SQL Server to apply changes
-        Write-Info "Restarting SQL Server to apply authentication changes..."
-        Restart-Service -Name "MSSQL`$$($Config.SqlInstanceName)" -Force
-        Start-Sleep -Seconds 15
-        Write-Success "SQL Server restarted"
+        if ($currentLoginMode.LoginMode -ne 2) {
+            Set-ItemProperty -Path $actualPath.PSPath -Name "LoginMode" -Value 2 -ErrorAction Stop
+            Write-Info "SQL Server authentication mode changed to Mixed (2)"
+            
+            # Restart SQL Server to apply changes
+            Write-Info "Restarting SQL Server to apply authentication changes..."
+            Restart-Service -Name "MSSQL`$$($Config.SqlInstanceName)" -Force
+            Start-Sleep -Seconds 10
+            
+            # Wait for service to be fully running
+            $maxWait = 60
+            $waited = 0
+            while ($waited -lt $maxWait) {
+                $svc = Get-Service -Name "MSSQL`$$($Config.SqlInstanceName)" -ErrorAction SilentlyContinue
+                if ($svc.Status -eq 'Running') {
+                    Write-Success "SQL Server service is running"
+                    break
+                }
+                Start-Sleep -Seconds 2
+                $waited += 2
+            }
+            
+            # Additional wait for SQL Server to accept connections
+            Write-Info "Waiting for SQL Server to fully initialize..."
+            Start-Sleep -Seconds 10
+            Write-Success "SQL Server authentication enabled and service restarted"
+        }
+        else {
+            Write-Info "SQL Server already configured for mixed mode authentication"
+        }
     }
     catch {
         Write-Warn "Could not enable SQL authentication via registry: $_"
@@ -575,14 +601,52 @@ function Configure-SqlServer {
         Write-Warn "Could not create firewall rule: $_"
     }
     
-    # Wait for SQL Server to be fully ready
-    Write-Info "Waiting for SQL Server to be fully ready for connections..."
-    Start-Sleep -Seconds 5
+    # Wait for SQL Server to be fully ready with connection testing
+    Write-Info "Testing SQL Server connectivity..."
+    
+    $serverInstance = "$env:COMPUTERNAME\$($Config.SqlInstanceName)"
+    $sqlcmdPath = Get-Command sqlcmd.exe -ErrorAction SilentlyContinue
+    
+    if (-not $sqlcmdPath) {
+        Write-Warn "sqlcmd.exe not found. Cannot verify SQL Server readiness"
+    }
+    else {
+        # Test Windows Authentication first
+        $maxRetries = 10
+        $retryCount = 0
+        $connected = $false
+        
+        while ($retryCount -lt $maxRetries -and -not $connected) {
+            Write-Info "Attempting Windows Authentication connection (attempt $($retryCount + 1)/$maxRetries)..."
+            
+            try {
+                $testArgs = @("-S", $serverInstance, "-E", "-Q", "SELECT @@VERSION", "-h", "-1")
+                $testResult = & sqlcmd.exe $testArgs 2>&1
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Windows Authentication connection successful"
+                    $connected = $true
+                }
+                else {
+                    Write-Warn "Connection failed: $testResult"
+                    Start-Sleep -Seconds 3
+                }
+            }
+            catch {
+                Write-Warn "Connection error: $_"
+                Start-Sleep -Seconds 3
+            }
+            
+            $retryCount++
+        }
+        
+        if (-not $connected) {
+            Exit-WithError "Could not establish connection to SQL Server after $maxRetries attempts"
+        }
+    }
     
     # Create ESET database and user using Windows Authentication first
     Write-Info "Configuring SQL Server authentication and creating database"
-    
-    $serverInstance = "$env:COMPUTERNAME\$($Config.SqlInstanceName)"
     
     # First, use Windows Authentication to enable SA and set password
     $setupSaScript = @"
@@ -663,33 +727,55 @@ PRINT 'Database configuration complete';
                 "-S", $serverInstance
                 "-E"  # Use Windows Authentication
                 "-i", $setupSaScriptPath
+                "-b"  # Stop on error
             )
             
+            Write-Info "Executing: sqlcmd.exe -S $serverInstance -E -i $setupSaScriptPath"
             $setupResult = & sqlcmd.exe $setupArgs 2>&1
+            
+            Write-Info "SA setup result: $setupResult"
+            Write-Info "Exit code: $LASTEXITCODE"
             
             if ($LASTEXITCODE -eq 0) {
                 Write-Success "SA account enabled successfully"
                 
-                # Wait a moment for changes to apply
-                Start-Sleep -Seconds 3
+                # Wait for changes to propagate
+                Write-Info "Waiting for authentication changes to take effect..."
+                Start-Sleep -Seconds 5
                 
-                # Now create database using SQL Authentication
-                Write-Info "Creating database and user using SQL Authentication"
-                $createArgs = @(
-                    "-S", $serverInstance
-                    "-U", "sa"
-                    "-P", $MySQLRootPassword
-                    "-i", $sqlScriptPath
-                )
-                
-                $result = & sqlcmd.exe $createArgs 2>&1
+                # Test SQL Authentication before proceeding
+                Write-Info "Testing SQL Authentication with SA account..."
+                $testSaArgs = @("-S", $serverInstance, "-U", "sa", "-P", $MySQLRootPassword, "-Q", "SELECT @@VERSION", "-h", "-1")
+                $testSaResult = & sqlcmd.exe $testSaArgs 2>&1
                 
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Success "Database and user created successfully"
+                    Write-Success "SQL Authentication test successful"
+                    
+                    # Now create database using SQL Authentication
+                    Write-Info "Creating database and user using SQL Authentication"
+                    $createArgs = @(
+                        "-S", $serverInstance
+                        "-U", "sa"
+                        "-P", $MySQLRootPassword
+                        "-i", $sqlScriptPath
+                        "-b"  # Stop on error
+                    )
+                    
+                    $result = & sqlcmd.exe $createArgs 2>&1
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "Database and user created successfully"
+                    }
+                    else {
+                        Write-Err "sqlcmd output: $result"
+                        Exit-WithError "Failed to create database and user"
+                    }
                 }
                 else {
-                    Write-Err "sqlcmd output: $result"
-                    Exit-WithError "Failed to create database and user"
+                    Write-Err "SQL Authentication test failed"
+                    Write-Err "Test result: $testSaResult"
+                    Write-Err "This usually means mixed mode authentication is not properly configured"
+                    Exit-WithError "Cannot authenticate with SA account"
                 }
             }
             else {
@@ -702,8 +788,8 @@ PRINT 'Database configuration complete';
         }
     }
     catch {
-        Write-Warn "Could not create database via sqlcmd: $_"
-        Write-Info "Database will be created during ESET installation"
+        Write-Err "Error during database setup: $_"
+        Write-Warn "Database will be created during ESET installation"
     }
     
     # Test SQL Server connection before proceeding
