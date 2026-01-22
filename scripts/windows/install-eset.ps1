@@ -865,11 +865,11 @@ function Install-EsetProtect {
     
     # Build MSI command line with correct ESET property names
     # Using P_ prefix for ESET properties as shown in their documentation
-    # Testing: "SQL Server" (matches ODBC driver name convention)
+    # Testing: "Microsoft SQL Server" (full official Microsoft branding)
     $msiCommand = "/i `"$installerPath`" /qn /norestart /l*v `"$msiLogPath`" " +
                   "ADDLOCAL=ALL " +
                   "P_ACTIVATE_WITH_LICENSE_NOW=0 " +
-                  "P_DB_TYPE=`"SQL Server`" " +
+                  "P_DB_TYPE=`"Microsoft SQL Server`" " +
                   "P_DB_SERVER=`"$serverInstance`" " +
                   "P_DB_NAME=`"$($Config.DatabaseName)`" " +
                   "P_DB_ADMIN_NAME=`"sa`" " +

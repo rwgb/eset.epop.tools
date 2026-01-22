@@ -74,33 +74,51 @@ The script will:
 
 ## Windows Installation
 
-### One-Line PowerShell Installation (Recommended)
+> **⚠️ NOTICE: Windows Installation Currently Not Working**  
+> The Windows automated installation script is currently experiencing compatibility issues with ESET's MSI installer database type parameter validation. We are actively investigating the correct parameter format required by ESET Protect.
+> 
+> **Current Status:**
+> - SQL Server Express installation: ✅ Working
+> - Database configuration: ✅ Working  
+> - ESET MSI installation: ❌ Failing (database type parameter issue)
+>
+> **Alternative Options:**
+> - Use the Linux installation script (fully working)
+> - Perform manual Windows installation following ESET's official documentation
+> - Wait for script updates (we're working on a fix)
+>
+> For updates, see [Issue #XX](https://github.com/rwgb/eset.epop.tools/issues) or the [scripts/windows/README.md](scripts/windows/README.md).
 
-**Quick install** (downloads and runs the automated PowerShell installer):
+### ~~One-Line PowerShell Installation~~ (Currently Unavailable)
+
+~~**Quick install** (downloads and runs the automated PowerShell installer):~~
 
 ```powershell
+# ⚠️ THIS SCRIPT CURRENTLY DOES NOT COMPLETE SUCCESSFULLY
 # Run PowerShell as Administrator, then execute:
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/windows/install-eset.ps1" -OutFile "$env:TEMP\install-eset.ps1"; Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\install-eset.ps1"
 ```
 
-Or using shorter alias:
+~~Or using shorter alias:~~
 
 ```powershell
+# ⚠️ THIS SCRIPT CURRENTLY DOES NOT COMPLETE SUCCESSFULLY
 iwr -Uri "https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/windows/install-eset.ps1" -OutFile "$env:TEMP\install-eset.ps1"; Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\install-eset.ps1"
 ```
 
-The script will:
-- Install SQL Server Express x64
-- Configure database and firewall
-- Install ESET Protect Server with unattended installation
-- Configure all services
-- Provide verbose logging
+~~The script will:~~
+- ~~Install SQL Server Express x64~~
+- ~~Configure database and firewall~~
+- ~~Install ESET Protect Server with unattended installation~~
+- ~~Configure all services~~
+- ~~Provide verbose logging~~
 
-### Non-Interactive Installation (CI/Automation)
+### ~~Non-Interactive Installation (CI/Automation)~~ (Currently Unavailable)
 
-For automated deployments, provide credentials as parameters:
+~~For automated deployments, provide credentials as parameters:~~
 
 ```powershell
+# ⚠️ THIS SCRIPT CURRENTLY DOES NOT COMPLETE SUCCESSFULLY
 # Download the script
 iwr -Uri "https://raw.githubusercontent.com/rwgb/eset.epop.tools/dev/scripts/windows/install-eset.ps1" -OutFile "$env:TEMP\install-eset.ps1"
 
@@ -113,19 +131,20 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
   -DbUserPassword "your_db_password"
 ```
 
-### Alternative: Pre-compiled Installer
+### ~~Alternative: Pre-compiled Installer~~ (Status Unknown)
 
-Download the Go-based installer from the [latest release](https://github.com/rwgb/eset.epop.tools/releases/latest):
+~~Download the Go-based installer from the [latest release](https://github.com/rwgb/eset.epop.tools/releases/latest):~~
 
 ```powershell
+# ⚠️ AVAILABILITY NOT CONFIRMED
 # Download and run the compiled installer
 iwr -Uri "https://github.com/rwgb/eset.epop.tools/releases/latest/download/eset-protect-installer.exe" -OutFile "$env:TEMP\eset-installer.exe"; Start-Process "$env:TEMP\eset-installer.exe" -Verb RunAs
 ```
 
-Or manually:
-1. Download `eset-protect-installer.exe`
-2. Right-click → "Run as Administrator"
-3. Follow the interactive prompts
+~~Or manually:~~
+1. ~~Download `eset-protect-installer.exe`~~
+2. ~~Right-click → "Run as Administrator"~~
+3. ~~Follow the interactive prompts~~
 
 ### Requirements
 
@@ -135,7 +154,7 @@ Or manually:
 - 20 GB free disk space
 - 4 GB RAM minimum
 
-For detailed Windows installation documentation, see [scripts/windows/README.md](scripts/windows/README.md).
+For detailed Windows installation documentation and troubleshooting, see [scripts/windows/README.md](scripts/windows/README.md).
 
 ---
 
