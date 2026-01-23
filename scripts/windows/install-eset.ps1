@@ -67,11 +67,19 @@ $script:Config = @{
     SqlServerExpressFile = "SQLEXPR_x64_ENU.exe"
     EsetInstallerUrl = "https://download.eset.com/com/eset/apps/business/era/server/windows/latest/server_x64.msi"
     EsetInstallerFile = "server_x64.msi"
+    EsetWebConsoleUrl = "https://download.eset.com/com/eset/apps/business/era/webconsole/latest/era_x64.war"
+    EsetWebConsoleFile = "era_x64.war"
+    TomcatVersion = "9.0.85"
+    TomcatUrl = "https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.85/bin/apache-tomcat-9.0.85.zip"
+    TomcatFile = "apache-tomcat-9.0.85.zip"
+    TomcatDirectory = "C:\Tomcat"
     LogDirectory = "C:\ProgramData\ESET\Logs\Installer"
     TempDirectory = "C:\Temp\ESET-Install"
     SqlInstanceName = "ESETERA"
     SqlPort = 1433
     DatabaseName = "era_db"
+    TomcatHttpPort = 8080
+    TomcatHttpsPort = 8443
 }
 
 # Logging setup
@@ -865,11 +873,11 @@ function Install-EsetProtect {
     
     # Build MSI command line with correct ESET property names
     # Using P_ prefix for ESET properties as shown in their documentation
-    # Testing: "Microsoft SQL Server" (full official Microsoft branding)
+    # Value confirmed from StartupConfiguration.ini: DatabaseType=MSSQLOdbc
     $msiCommand = "/i `"$installerPath`" /qn /norestart /l*v `"$msiLogPath`" " +
                   "ADDLOCAL=ALL " +
                   "P_ACTIVATE_WITH_LICENSE_NOW=0 " +
-                  "P_DB_TYPE=`"Microsoft SQL Server`" " +
+                  "P_DB_TYPE=`"MSSQLOdbc`" " +
                   "P_DB_SERVER=`"$serverInstance`" " +
                   "P_DB_NAME=`"$($Config.DatabaseName)`" " +
                   "P_DB_ADMIN_NAME=`"sa`" " +
@@ -904,6 +912,283 @@ function Install-EsetProtect {
         Exit-WithError "ESET Protect installation failed"
     }
 }
+
+#######################################
+# Java Detection
+#######################################
+
+function Find-JavaPath {
+    Write-Info "Detecting Java installation"
+    
+    # Check if java.exe is in PATH
+    try {
+        $javaCmd = Get-Command java.exe -ErrorAction SilentlyContinue
+        if ($javaCmd) {
+            $javaPath = Split-Path -Parent $javaCmd.Source | Split-Path -Parent
+            Write-Info "Java detected at: $javaPath"
+            return $javaPath
+        }
+    }
+    catch {
+        Write-Info "Java not found in PATH"
+    }
+    
+    # Check common Java installation paths
+    $javaPaths = @(
+        "C:\Program Files\Java",
+        "C:\Program Files (x86)\Java",
+        "$env:JAVA_HOME"
+    )
+    
+    foreach ($basePath in $javaPaths) {
+        if (Test-Path $basePath) {
+            $javaInstalls = Get-ChildItem -Path $basePath -Directory -ErrorAction SilentlyContinue | 
+                            Where-Object { $_.Name -match "jdk|jre" } | 
+                            Sort-Object -Property Name -Descending
+            
+            if ($javaInstalls) {
+                $script:JavaPath = $javaInstalls[0].FullName
+                Write-Info "Java detected at: $script:JavaPath"
+                return $script:JavaPath
+            }
+        }
+    }
+    
+    Write-Warn "Java installation not found. Tomcat requires Java to run."
+    return $null
+}
+
+#######################################
+# Apache Tomcat Installation
+#######################################
+
+function Install-ApacheTomcat {
+    Write-Step "Step 4: Installing Apache Tomcat 9"
+    
+    # Check if Java is available
+    if (-not (Find-JavaPath)) {
+        Write-Warn "Java not found. Skipping Tomcat installation."
+        Write-Warn "Note: Java is required for Tomcat. Consider installing Java Development Kit (JDK) manually."
+        return
+    }
+    
+    $tomcatPath = Join-Path $Config.TempDirectory $Config.TomcatFile
+    
+    # Download Tomcat if not present
+    if (-not (Test-Path $tomcatPath)) {
+        if (-not (Get-FileDownload -Url $Config.TomcatUrl -OutputPath $tomcatPath -Description "Apache Tomcat 9")) {
+            Write-Warn "Failed to download Apache Tomcat. Skipping Tomcat installation."
+            return
+        }
+    }
+    else {
+        Write-Info "Apache Tomcat installer already exists"
+    }
+    
+    # Check if Tomcat already installed
+    if (Test-Path $Config.TomcatDirectory) {
+        Write-Warn "Tomcat directory already exists at $($Config.TomcatDirectory)"
+        Write-Info "Skipping Tomcat installation"
+        return
+    }
+    
+    # Extract Tomcat
+    Write-Info "Extracting Apache Tomcat 9"
+    try {
+        # Use built-in expansion
+        $extractPath = Join-Path $Config.TempDirectory "tomcat-extract-$$"
+        New-Item -Path $extractPath -ItemType Directory -Force | Out-Null
+        
+        # Expand the ZIP file
+        Expand-Archive -Path $tomcatPath -DestinationPath $extractPath -ErrorAction Stop
+        
+        # Find the extracted Tomcat directory (contains bin, conf, webapps)
+        $tomcatExtracted = Get-ChildItem -Path $extractPath -Directory | 
+                          Where-Object { Test-Path (Join-Path $_.FullName "bin\catalina.bat") } |
+                          Select-Object -First 1
+        
+        if (-not $tomcatExtracted) {
+            Exit-WithError "Could not find Tomcat directory in extracted archive"
+        }
+        
+        # Move to final location
+        Write-Info "Installing Tomcat to $($Config.TomcatDirectory)"
+        Move-Item -Path $tomcatExtracted.FullName -Destination $Config.TomcatDirectory -ErrorAction Stop
+        
+        Write-Success "Apache Tomcat extracted successfully"
+    }
+    catch {
+        Write-Err "Failed to extract Tomcat: $_"
+        Exit-WithError "Tomcat extraction failed"
+    }
+    
+    # Create a simple startup script for Windows
+    Write-Info "Creating Tomcat startup script"
+    $startupScript = @"
+@echo off
+setlocal
+set JAVA_HOME=$script:JavaPath
+set CATALINA_HOME=$($Config.TomcatDirectory)
+cd /d "%CATALINA_HOME%\bin"
+call catalina.bat start
+"@
+    
+    $startupFile = Join-Path $Config.TomcatDirectory "start-tomcat.bat"
+    Set-Content -Path $startupFile -Value $startupScript -Force
+    
+    # Create shutdown script
+    $shutdownScript = @"
+@echo off
+setlocal
+set JAVA_HOME=$script:JavaPath
+set CATALINA_HOME=$($Config.TomcatDirectory)
+cd /d "%CATALINA_HOME%\bin"
+call catalina.bat stop
+"@
+    
+    $shutdownFile = Join-Path $Config.TomcatDirectory "stop-tomcat.bat"
+    Set-Content -Path $shutdownFile -Value $shutdownScript -Force
+    
+    # Start Tomcat
+    Write-Info "Starting Apache Tomcat 9"
+    try {
+        $env:JAVA_HOME = $script:JavaPath
+        $env:CATALINA_HOME = $Config.TomcatDirectory
+        
+        $tomcatBin = Join-Path $Config.TomcatDirectory "bin"
+        $catalinaBat = Join-Path $tomcatBin "catalina.bat"
+        
+        # Start Tomcat (this spawns a new process)
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$catalinaBat start`"" -PassThru -NoNewWindow
+        $process.WaitForExit(5000)  # Give it a moment
+        
+        # Wait for Tomcat to start
+        Write-Info "Waiting for Tomcat to start..."
+        Start-Sleep -Seconds 5
+        
+        # Check if Tomcat is running
+        try {
+            $response = Invoke-WebRequest -Uri "http://localhost:$($Config.TomcatHttpPort)" -ErrorAction SilentlyContinue -TimeoutSec 3
+            Write-Success "Apache Tomcat 9 is running on port $($Config.TomcatHttpPort)"
+        }
+        catch {
+            Write-Warn "Could not verify Tomcat is running, but startup command completed"
+            Write-Info "Check Tomcat logs at: $($Config.TomcatDirectory)\logs"
+        }
+    }
+    catch {
+        Write-Err "Error starting Tomcat: $_"
+        Write-Warn "You may need to start Tomcat manually using: `"$startupFile`""
+    }
+}
+
+#######################################
+# ESET Web Console Installation
+#######################################
+
+function Install-EsetWebConsole {
+    Write-Step "Step 5: Installing ESET Protect Web Console"
+    
+    # Check if Tomcat is installed
+    if (-not (Test-Path $Config.TomcatDirectory)) {
+        Write-Warn "Tomcat not found at $($Config.TomcatDirectory)"
+        Write-Warn "Skipping Web Console installation. ESET's built-in web console should be available."
+        return
+    }
+    
+    $warPath = Join-Path $Config.TempDirectory $Config.EsetWebConsoleFile
+    $webappsPath = Join-Path $Config.TomcatDirectory "webapps"
+    $eraPath = Join-Path $webappsPath "era"
+    $eraWarPath = Join-Path $webappsPath "era.war"
+    
+    # Download WAR file
+    if (-not (Test-Path $warPath)) {
+        Write-Info "Downloading ESET Web Console WAR file"
+        if (-not (Get-FileDownload -Url $Config.EsetWebConsoleUrl -OutputPath $warPath -Description "ESET Web Console")) {
+            Write-Err "Failed to download ESET Web Console"
+            return
+        }
+    }
+    else {
+        Write-Info "ESET Web Console WAR file already exists"
+    }
+    
+    # Stop Tomcat before deploying
+    Write-Info "Stopping Tomcat for clean deployment"
+    try {
+        $tomcatBin = Join-Path $Config.TomcatDirectory "bin"
+        $catalinaBat = Join-Path $tomcatBin "catalina.bat"
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$catalinaBat stop`"" -PassThru -NoNewWindow
+        $process.WaitForExit(10000)
+    }
+    catch {
+        Write-Warn "Could not stop Tomcat gracefully: $_"
+    }
+    
+    # Wait a moment
+    Start-Sleep -Seconds 3
+    
+    # Remove old deployment if exists
+    if (Test-Path $eraPath) {
+        Write-Info "Removing old ERA deployment"
+        Remove-Item -Path $eraPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path $eraWarPath) {
+        Remove-Item -Path $eraWarPath -Force -ErrorAction SilentlyContinue
+    }
+    
+    # Copy WAR file to webapps
+    Write-Info "Deploying ESET Web Console to Tomcat"
+    try {
+        Copy-Item -Path $warPath -Destination $eraWarPath -Force -ErrorAction Stop
+        $fileSize = (Get-Item $eraWarPath).Length / 1MB
+        Write-Info "WAR file deployed (${fileSize:N2} MB)"
+    }
+    catch {
+        Exit-WithError "Failed to copy WAR file to webapps: $_"
+    }
+    
+    # Start Tomcat
+    Write-Info "Starting Tomcat for WAR deployment"
+    try {
+        $env:JAVA_HOME = $script:JavaPath
+        $env:CATALINA_HOME = $Config.TomcatDirectory
+        
+        $tomcatBin = Join-Path $Config.TomcatDirectory "bin"
+        $catalinaBat = Join-Path $tomcatBin "catalina.bat"
+        
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$catalinaBat start`"" -PassThru -NoNewWindow
+        $process.WaitForExit(5000)
+    }
+    catch {
+        Exit-WithError "Failed to start Tomcat: $_"
+    }
+    
+    Write-Info "Waiting for Tomcat to deploy the web application..."
+    
+    # Wait for deployment
+    $maxWait = 120
+    $waited = 0
+    while ((-not (Test-Path $eraPath)) -and ($waited -lt $maxWait)) {
+        Start-Sleep -Seconds 5
+        $waited += 5
+        if (($waited % 15) -eq 0) {
+            Write-Info "Still waiting for deployment... ${waited}s / ${maxWait}s"
+        }
+    }
+    
+    # Check if deployed
+    if (Test-Path $eraPath) {
+        Write-Success "Web Console deployed successfully"
+        Write-Info "Web Console accessible at: http://localhost:$($Config.TomcatHttpPort)/era"
+    }
+    else {
+        Write-Err "Web Console deployment timeout after $maxWait seconds"
+        Write-Err "Check Tomcat logs at: $($Config.TomcatDirectory)\logs"
+        Write-Warn "Continuing with installation. You may need to troubleshoot Tomcat separately."
+    }
+}
+
 
 #######################################
 # Verification
@@ -1054,7 +1339,13 @@ function Start-Installation {
         # Step 3: Install ESET Protect
         Install-EsetProtect
         
-        # Step 4: Verify installation
+        # Step 4: Install Apache Tomcat
+        Install-ApacheTomcat
+        
+        # Step 5: Install ESET Web Console
+        Install-EsetWebConsole
+        
+        # Step 6: Verify installation
         Test-Installation
         
         # Cleanup
@@ -1066,17 +1357,32 @@ function Start-Installation {
         Write-Host "Installation Complete!" -ForegroundColor Green
         Write-Host "========================================" -ForegroundColor Green
         Write-Host ""
-        Write-Host "Web Console URL: https://$($env:COMPUTERNAME):2223" -ForegroundColor Cyan
-        Write-Host "Username: Administrator" -ForegroundColor Cyan
-        Write-Host "Password: <the password you provided>" -ForegroundColor Cyan
+        Write-Host "ESET Protect Web Console (Built-in):" -ForegroundColor Cyan
+        Write-Host "  URL: https://$($env:COMPUTERNAME):2223" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "ESET Protect Web Console (Tomcat):" -ForegroundColor Cyan
+        Write-Host "  URL: http://localhost:$($Config.TomcatHttpPort)/era" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Credentials:" -ForegroundColor Cyan
+        Write-Host "  Username: Administrator" -ForegroundColor Cyan
+        Write-Host "  Password: <the password you provided>" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "SQL Server Instance: $($env:COMPUTERNAME)\$($Config.SqlInstanceName)" -ForegroundColor Cyan
         Write-Host "Database Name: $($Config.DatabaseName)" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Installation logs:" -ForegroundColor Cyan
         Write-Host "  - Main log: $LogFile" -ForegroundColor Cyan
+        Write-Host "  - Tomcat log: $($Config.TomcatDirectory)\logs\catalina.out" -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "Please ensure Windows Firewall allows ports 2222 and 2223" -ForegroundColor Yellow
+        Write-Host "Please ensure Windows Firewall allows the following ports:" -ForegroundColor Yellow
+        Write-Host "  - Port 2222 (ESET Server)" -ForegroundColor Yellow
+        Write-Host "  - Port 2223 (ESET Web Console - Built-in)" -ForegroundColor Yellow
+        Write-Host "  - Port $($Config.TomcatHttpPort) (Tomcat HTTP - optional)" -ForegroundColor Yellow
+        Write-Host "  - Port $($Config.TomcatHttpsPort) (Tomcat HTTPS - optional)" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Tomcat Administration:" -ForegroundColor Cyan
+        Write-Host "  - Start: $($Config.TomcatDirectory)\start-tomcat.bat" -ForegroundColor Cyan
+        Write-Host "  - Stop: $($Config.TomcatDirectory)\stop-tomcat.bat" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Thank you for installing ESET Protect On-Prem!" -ForegroundColor Green
         
